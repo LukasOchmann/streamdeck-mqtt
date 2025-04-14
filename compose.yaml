@@ -1,0 +1,8 @@
+services:
+  streamdeck:
+    image: "streamdeck-mqtt:0.0.1"
+    privileged: true
+    network_mode: host
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./data.json:/app/data.json
