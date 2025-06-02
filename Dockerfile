@@ -1,10 +1,21 @@
-FROM python:3.9-alpine
+FROM python:3.9-slim-bullseye
 
-# Install dependencies including Rust
-RUN apk add --no-cache \
-    build-base cairo-dev cairo cairo-tools \
-    jpeg-dev zlib-dev freetype-dev lcms2-dev openjpeg-dev tiff-dev tk-dev tcl-dev hidapi-dev \
-    rust cargo
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libcairo2-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libopenjp2-7-dev \
+    libtiff5-dev \
+    tk-dev \
+    tcl-dev \
+    libhidapi-dev \
+    libusb-1.0-0-dev \
+    rustc cargo \
+ && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
