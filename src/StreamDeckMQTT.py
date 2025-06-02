@@ -89,7 +89,7 @@ class StreamDeckMQTT:
     def init(self):
         if self.deck:
             print("with deck")
-            self.deck.open()
+            
             self.deck.reset()
             self.deck.set_brightness(100)
 

@@ -93,6 +93,7 @@ if __name__ == "__main__":
 
         mqttc.connect(MQTT_HOST, MQTT_PORT, 60)
 
+        deck.open()
         print_deck_info(index, deck)
         StreamDeckMQTT(mqttc, deck)
         
