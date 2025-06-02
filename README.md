@@ -10,7 +10,7 @@ Use an Raspberry PI or Raspberry Pi Zero W and connect the streamdeck.
 There is a docker-image:
 
 ```sh
-  docker run -t -i --privileged -v /dev/bus/usb:/dev/bus/usb -v ./data.json:/app/data.json streamdeck-mqtt:latest
+  docker run -d -t -i --privileged --device /dev/hidraw0 --env-file .env.streamdeck-mqtt -v ./data.json:/app/data.json streamdeck-mqtt:latest
 ```
 
 You can either mount all usb devices or just the one you need.

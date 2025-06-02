@@ -90,7 +90,7 @@ class StreamDeckMQTT:
         if self.deck:
             print("with deck")
             
-            self.deck.reset()
+            #self.deck.reset()
             self.deck.set_brightness(100)
 
             serialNumber = self.deck.get_serial_number()
