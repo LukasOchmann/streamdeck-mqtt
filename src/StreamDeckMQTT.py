@@ -51,14 +51,16 @@ class StreamDeckMQTT:
             self.config = {
                 "brightness": 60,
                 "keys": []
-            }
-
-            for i in range(self.deck.key_count()):
-                print("create {}".format(i))
-                self.config["keys"].append({})
-                
+            }                
             pass
         finally:
+
+            for i in range(self.deck.key_count()):
+
+                if i > len(self.config["keys"]):
+                    print("create {}".format(i))
+                    self.config["keys"].append({})
+
             print("continue")
             # Stream Deck Setup
             self.init()
@@ -220,9 +222,11 @@ class StreamDeckMQTT:
         # Use a scoped-with on the deck to ensure we're the only thread using it
         # right now.
         with deck:
-            self.mqtt_client.publish("streamdeck/{}".format(key))
+            if state == False:
+                self.mqtt_client.publish("streamdeck/{}".format(key))
+                self.mqtt_client.publish("streamdeck/{}/{}".format(deck.get_serial_number(), key))
+            
             self.mqtt_client.publish("streamdeck/{}/{}".format(key, "down" if state else "up"))
-            self.mqtt_client.publish("streamdeck/{}/{}".format(deck.get_serial_number(), key))
             self.mqtt_client.publish("streamdeck/{}/{}/{}".format(deck.get_serial_number(), key, "down" if state else "up"))
 
     
