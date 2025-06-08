@@ -1,0 +1,70 @@
+blueprint:
+  name: Stream Deck Dimmer Toggle
+  description: Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT, Richtung wechselt bei jedem Drücken.
+  domain: automation
+  input:
+    mqtt_key_number:
+      name: Stream Deck Key Number
+      selector:
+        text:
+    light_target:
+      name: Lampe
+      selector:
+        target:
+          entity:
+            domain: light
+    dim_interval:
+      name: Dimmschritt-Zeit (ms)
+      default: 300
+      selector:
+        number:
+          min: 100
+          max: 2000
+          step: 100
+          unit_of_measurement: ms
+
+variables:
+  mqtt_down_topic: "streamdeck/{{ iif(this.input.mqtt_key_number, this.input.mqtt_key_number, '1') }}/down"
+  mqtt_up_topic: "streamdeck/{{ iif(this.input.mqtt_key_number, this.input.mqtt_key_number, '1') }}/up"
+  light_entity: !input light_target
+  interval: !input dim_interval
+
+trigger:
+  - platform: mqtt
+    topic: !lambda "return 'streamdeck/' + blueprint.input['mqtt_key_number'] + '/down';"
+    id: down
+  - platform: mqtt
+    topic: !lambda "return 'streamdeck/' + blueprint.input['mqtt_key_number'] + '/up';"
+    id: up
+
+mode: restart
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: down
+        sequence:
+          - service: input_boolean.toggle
+            target:
+              entity_id: input_boolean.dim_direction
+          - repeat:
+              while:
+                - condition: template
+                  value_template: "{{ not is_state('input_boolean.dim_active', 'off') }}"
+              sequence:
+                - service: light.turn_on
+                  data:
+                    entity_id: "{{ light_entity.entity_id }}"
+                    brightness_step: >
+                      {{ 15 if is_state('input_boolean.dim_direction', 'on') else -15 }}
+                - delay:
+                    milliseconds: !input dim_interval
+      - conditions:
+          - condition: trigger
+            id: up
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.dim_active
