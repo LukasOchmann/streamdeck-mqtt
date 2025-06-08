@@ -1,14 +1,20 @@
 blueprint:
   name: Stream Deck Dimmer Toggle
-  description: Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT, Richtung wechselt bei jedem Drücken.
+  description: Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT. Die Richtung wechselt bei jedem Drücken.
   domain: automation
   input:
-    mqtt_key_number:
-      name: Stream Deck Key Number
+    mqtt_down_topic:
+      name: MQTT Down Topic
+      description: Topic, das beim Drücken des Buttons gesendet wird (z.B. streamdeck/1/down)
+      selector:
+        text:
+    mqtt_up_topic:
+      name: MQTT Up Topic
+      description: Topic, das beim Loslassen des Buttons gesendet wird (z.B. streamdeck/1/up)
       selector:
         text:
     light_target:
-      name: Lampe
+      name: Ziel-Lampe
       selector:
         target:
           entity:
@@ -23,19 +29,17 @@ blueprint:
           step: 100
           unit_of_measurement: ms
 
-variables:
-  mqtt_down_topic: "streamdeck/{{ iif(this.input.mqtt_key_number, this.input.mqtt_key_number, '1') }}/down"
-  mqtt_up_topic: "streamdeck/{{ iif(this.input.mqtt_key_number, this.input.mqtt_key_number, '1') }}/up"
-  light_entity: !input light_target
-  interval: !input dim_interval
-
 trigger:
   - platform: mqtt
-    topic: !lambda "return 'streamdeck/' + blueprint.input['mqtt_key_number'] + '/down';"
+    topic: !input mqtt_down_topic
     id: down
   - platform: mqtt
-    topic: !lambda "return 'streamdeck/' + blueprint.input['mqtt_key_number'] + '/up';"
+    topic: !input mqtt_up_topic
     id: up
+
+variables:
+  light_entity: !input light_target
+  interval: !input dim_interval
 
 mode: restart
 condition: []
@@ -46,13 +50,17 @@ action:
           - condition: trigger
             id: down
         sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.dim_active
           - service: input_boolean.toggle
             target:
               entity_id: input_boolean.dim_direction
           - repeat:
               while:
-                - condition: template
-                  value_template: "{{ not is_state('input_boolean.dim_active', 'off') }}"
+                - condition: state
+                  entity_id: input_boolean.dim_active
+                  state: "on"
               sequence:
                 - service: light.turn_on
                   data:
