@@ -1,16 +1,18 @@
 blueprint:
-  name: Stream Deck Dimmer Toggle
-  description: Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT. Die Richtung wechselt bei jedem Drücken.
+  name: Stream Deck Dimmer Toggle (konfigurierbare Helfer)
+  description: >
+    Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT.
+    Die Richtung wechselt bei jedem Drücken. Alle relevanten Helfer (input_booleans) sind frei konfigurierbar.
   domain: automation
   input:
     mqtt_down_topic:
       name: MQTT Down Topic
-      description: Topic, das beim Drücken des Buttons gesendet wird (z.B. streamdeck/1/down)
+      description: Topic, das beim Drücken gesendet wird (z.B. streamdeck/1/down)
       selector:
         text:
     mqtt_up_topic:
       name: MQTT Up Topic
-      description: Topic, das beim Loslassen des Buttons gesendet wird (z.B. streamdeck/1/up)
+      description: Topic, das beim Loslassen gesendet wird (z.B. streamdeck/1/up)
       selector:
         text:
     light_target:
@@ -28,6 +30,18 @@ blueprint:
           max: 2000
           step: 100
           unit_of_measurement: ms
+    dim_active_helper:
+      name: Input Boolean – Aktiv
+      description: Wird beim Drücken aktiviert, beim Loslassen deaktiviert (z.B. input_boolean.dim_active_1)
+      selector:
+        entity:
+          domain: input_boolean
+    dim_direction_helper:
+      name: Input Boolean – Richtung
+      description: Speichert die aktuelle Richtung (wird bei jedem Drücken getoggelt)
+      selector:
+        entity:
+          domain: input_boolean
 
 trigger:
   - platform: mqtt
@@ -40,6 +54,8 @@ trigger:
 variables:
   light_entity: !input light_target
   interval: !input dim_interval
+  active_helper: !input dim_active_helper
+  direction_helper: !input dim_direction_helper
 
 mode: restart
 condition: []
@@ -52,27 +68,27 @@ action:
         sequence:
           - service: input_boolean.turn_on
             target:
-              entity_id: input_boolean.dim_active
+              entity_id: "{{ active_helper }}"
           - service: input_boolean.toggle
             target:
-              entity_id: input_boolean.dim_direction
+              entity_id: "{{ direction_helper }}"
           - repeat:
               while:
                 - condition: state
-                  entity_id: input_boolean.dim_active
+                  entity_id: "{{ active_helper }}"
                   state: "on"
               sequence:
                 - service: light.turn_on
                   data:
                     entity_id: "{{ light_entity.entity_id }}"
                     brightness_step: >
-                      {{ 15 if is_state('input_boolean.dim_direction', 'on') else -15 }}
+                      {{ 15 if is_state(direction_helper, 'on') else -15 }}
                 - delay:
-                    milliseconds: !input dim_interval
+                    milliseconds: "{{ interval }}"
       - conditions:
           - condition: trigger
             id: up
         sequence:
           - service: input_boolean.turn_off
             target:
-              entity_id: input_boolean.dim_active
+              entity_id: "{{ active_helper }}"
