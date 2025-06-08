@@ -1,5 +1,5 @@
 blueprint:
-  name: Stream Deck Dimmer Toggle (konfigurierbare Helfer)
+  name: Stream Deck Dimmer Toggle
   description: >
     Dimmt eine Lampe beim Halten eines Stream Deck Buttons über MQTT.
     Die Richtung wechselt bei jedem Drücken. Alle relevanten Helfer (input_booleans) sind frei konfigurierbar.
