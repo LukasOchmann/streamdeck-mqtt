@@ -68,15 +68,14 @@ action:
         sequence:
           - service: input_boolean.turn_on
             target:
-              entity_id: "{{ active_helper }}"
+              entity_id: !input dim_active_helper
           - service: input_boolean.toggle
             target:
-              entity_id: "{{ direction_helper }}"
+              entity_id: !input dim_direction_helper
           - repeat:
               while:
-                - condition: state
-                  entity_id: "{{ active_helper }}"
-                  state: "on"
+                - condition: template
+                  value_template: "{{ is_state(active_helper, 'on') }}"
               sequence:
                 - service: light.turn_on
                   data:
@@ -91,4 +90,4 @@ action:
         sequence:
           - service: input_boolean.turn_off
             target:
-              entity_id: "{{ active_helper }}"
+              entity_id: !input dim_active_helper
