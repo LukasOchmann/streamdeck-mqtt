@@ -75,7 +75,7 @@ action:
           - repeat:
               while:
                 - condition: template
-                  value_template: "{{ is_state(!ivariables active_helper, 'on') }}"
+                  value_template: "{{ is_state(active_helper, 'on') }}"
               sequence:
                 - service: light.turn_on
                   data:
