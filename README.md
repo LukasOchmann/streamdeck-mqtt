@@ -1,20 +1,57 @@
 # Streamdeck MQTT
 
-I created this project because i wanted to have an stream deck as an controller for 
+I created this project because i wanted to have an stream deck as an controller for
 home assistant. I found (this streamdeck)[https://github.com/timothycrosley/streamdeck-ui].
 
 
-## Usage 
+## Usage
 
-Use an Raspberry PI or Raspberry Pi Zero W and connect the streamdeck.
-There is a docker-image:
+Use a Raspberry Pi or Raspberry Pi Zero W and connect the Stream Deck.
+
+### Docker Images
+
+Pre-built Docker images are available from GitHub Container Registry for multiple architectures:
+- `linux/amd64` (x86_64)
+- `linux/arm64` (Raspberry Pi 4, Pi 400)
+- `linux/arm/v7` (Raspberry Pi 3, Pi Zero 2 W)
+
+Available tags:
+- `latest` - Latest stable release from main branch
+- `main` - Latest commit on main branch
+- `develop` - Latest commit on develop branch
+- `v1.0.0` - Specific version tags
+- `<branch-name>` - Latest commit from any branch
+
+### Using Docker Run
 
 ```sh
-  docker run -d -t -i --privileged --device /dev/hidraw0 --env-file .env.streamdeck-mqtt -v ./data.json:/app/data.json streamdeck-mqtt:latest
+docker run -d \
+  --device /dev/bus/usb:/dev/bus/usb \
+  --cap-add=SYS_RAWIO \
+  --env-file .env \
+  -v ./data.json:/app/data.json \
+  ghcr.io/lukasochmann/streamdeck-mqtt:latest
 ```
 
-You can either mount all usb devices or just the one you need.
-Create a data.json that is empty, this wipp persist the config of the Keys.
+### Using Docker Compose
+
+```yaml
+services:
+  streamdeck:
+    image: ghcr.io/lukasochmann/streamdeck-mqtt:latest
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    cap_add:
+      - SYS_RAWIO
+    volumes:
+      - ./data.json:/app/data.json
+    env_file:
+      - .env
+    restart: unless-stopped
+```
+
+You can either mount all USB devices or just the one you need.
+Create a data.json file (can be empty initially), this will persist the config of the keys.
 
 
 ## Data.json
@@ -48,29 +85,29 @@ To Configure the MQTT-Client there are Environment Variables.
 
 ### Subscribe
 
-The service subscribes the main topic `streamdeck/` and `streamdeck/<serialNumber>/`. 
+The service subscribes the main topic `streamdeck/` and `streamdeck/<serialNumber>/`.
 If you want to run multiple instances you should send the versions with <serialNumber>.
 
-#### `streamdeck/brightness` & `streandeck/<serialNumber>/brightness`
+#### `streamdeck/brightness` & `streamdeck/<serialNumber>/brightness`
 
 It updates the brightness. Valid are values between 0 and 100 where 0 means off and 100 means full brightness.
 Payload type Int.
 
-The value will be persisted in the `data.json`. 
+The value will be persisted in the `data.json`.
 
-#### `streamdeck/sleep` & `streandeck/<serialNumber>/sleep`
+#### `streamdeck/sleep` & `streamdeck/<serialNumber>/sleep`
 
 Just a shortcut to set the brightness to 0.
 
-#### `streamdeck/wake` & `streandeck/<serialNumber>/wake`
+#### `streamdeck/wake` & `streamdeck/<serialNumber>/wake`
 
-Sets the brightness to te last set brightness from the `data.json`.
+Sets the brightness to the last set brightness from the `data.json`.
 
-#### `streamdeck/config` & `streandeck/<serialNumber>/config`
+#### `streamdeck/config` & `streamdeck/<serialNumber>/config`
 
 Will override all keys. The payload has the same Schema as the Keys in the `data.json`.
 
-#### `streamdeck/config/<keyIdx>` & `streandeck/<serialNumber>/config/<keyIdx>`
+#### `streamdeck/config/<keyIdx>` & `streamdeck/<serialNumber>/config/<keyIdx>`
 
 It updates the one key by the index. Please see the key-schema.
 
