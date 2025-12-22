@@ -1,8 +1,16 @@
 services:
   streamdeck:
     image: "streamdeck-mqtt:0.0.1"
-    privileged: true
-    network_mode: host
-    volumes:
+    devices:
       - /dev/bus/usb:/dev/bus/usb
+    # Use specific capabilities instead of privileged mode
+    cap_add:
+      - SYS_RAWIO
+    volumes:
       - ./data.json:/app/data.json
+    env_file:
+      - .env
+    restart: unless-stopped
+    # If you have an MQTT broker in the same compose stack, uncomment:
+    # depends_on:
+    #   - mqtt

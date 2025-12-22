@@ -12,17 +12,22 @@ from StreamDeck.ImageHelpers import PILHelper
 from PIL import Image
 import io
 import requests
-import codecs
 import xml.etree.ElementTree
 
 
+
+# Configuration constants
+DEFAULT_BRIGHTNESS = 60
+DEFAULT_ICON_COLOR = "blue"
+ICON_DOWNLOAD_TIMEOUT = 5
+CONFIG_FILE = "data.json"
 
 keySchema = {
     "type": "object",
     "properties": {
         "type": {
             "type": "string",
-        
+
         },
         "icon": {"type": "string"},
     },
@@ -42,32 +47,43 @@ class StreamDeckMQTT:
         self.running = True
         self.mqtt_client = mqttClient
         self.deck = deck
+        self.config_lock = threading.Lock()
 
         try:
-            with open('data.json') as f:
+            with open(CONFIG_FILE) as f:
                 self.config = json.load(f)
-        except Exception:
-            print("No data.json sry", Exception)
+        except FileNotFoundError:
+            print(f"Warning: {CONFIG_FILE} not found, using default configuration")
             self.config = {
-                "brightness": 60,
+                "brightness": DEFAULT_BRIGHTNESS,
                 "keys": []
-            }                
-            pass
-        finally:
+            }
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in {CONFIG_FILE}: {e}")
+            self.config = {
+                "brightness": DEFAULT_BRIGHTNESS,
+                "keys": []
+            }
+        except Exception as e:
+            print(f"Error loading configuration: {e}")
+            self.config = {
+                "brightness": DEFAULT_BRIGHTNESS,
+                "keys": []
+            }
 
-            for i in range(self.deck.key_count()):
+        # Initialize missing keys (fixed off-by-one error: i >= instead of i >)
+        for i in range(self.deck.key_count()):
+            if i >= len(self.config["keys"]):
+                print(f"Initializing key {i}")
+                self.config["keys"].append({})
 
-                if i > len(self.config["keys"]):
-                    print("create {}".format(i))
-                    self.config["keys"].append({})
+        print("continue")
+        # Stream Deck Setup
+        self.init()
 
-            print("continue")
-            # Stream Deck Setup
-            self.init()
-
-            # Signal Handler
-            signal.signal(signal.SIGINT, self.signal_handler)
-            signal.signal(signal.SIGTERM, self.signal_handler)
+        # Signal Handler
+        signal.signal(signal.SIGINT, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
 
 
 
@@ -77,9 +93,6 @@ class StreamDeckMQTT:
         self.stop()
         sys.exit(0)
 
-    # Rest des Codes bleibt gleich...
-    # [Previous methods: render_key_image, key_change_callback, set_button_action, etc.]
-
     def stop(self):
         if hasattr(self, 'deck') and self.deck:
             self.deck.reset()
@@ -87,6 +100,12 @@ class StreamDeckMQTT:
         if hasattr(self, 'mqtt_client'):
             self.mqtt_client.loop_stop()
             self.mqtt_client.disconnect()
+
+    def _save_config(self):
+        """Thread-safe config save"""
+        with self.config_lock:
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(self.config, f, indent=2)
 
     def init(self):
         if self.deck:
@@ -125,18 +144,7 @@ class StreamDeckMQTT:
 
             self.update_keys()
 
-
             self.mqtt_client.on_message = self.on_message
-            self.mqtt_client.loop_forever()
-        
-
-            # Wait until all application threads have terminated (for this example,
-            # this is when all deck handles are closed).
-            for t in threading.enumerate():
-                try:
-                    t.join()
-                except RuntimeError:
-                    pass
         else:
             print("no deck")
 
@@ -154,50 +162,70 @@ class StreamDeckMQTT:
             self.update_config_key(msg.payload, int(topic.split('/').pop()))
     
     def update_brightness(self, brightness):
-        self.deck.set_brightness(brightness)
-        self.config["brightness"] = brightness
-        with open('data.json', 'w') as f:
-            json.dump(self.config, f)
+        """Update brightness with validation"""
+        try:
+            brightness_int = int(brightness)
+            if not 0 <= brightness_int <= 100:
+                print(f"Warning: Brightness {brightness_int} out of range [0, 100], clamping")
+                brightness_int = max(0, min(100, brightness_int))
+
+            self.deck.set_brightness(brightness_int)
+            with self.config_lock:
+                self.config["brightness"] = brightness_int
+            self._save_config()
+        except (ValueError, TypeError) as e:
+            print(f"Error: Invalid brightness value '{brightness}': {e}")
     
     def sleep(self):
         self.deck.set_brightness(0)
     
     def wake(self):
-        self.update_brightness(self.config["brightness"])
+        with self.config_lock:
+            brightness = self.config["brightness"]
+        self.update_brightness(brightness)
 
     def update_config(self, payload):
         try:
             config = json.loads(payload)
-            self.config["keys"] = config
-            with open('data.json', 'w') as f:
-                json.dump(self.config, f)
+            with self.config_lock:
+                self.config["keys"] = config
+            self._save_config()
             self.update_keys()
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON payload: {e}")
         except Exception as e:
-            print("could not validate Payload", e)
+            print(f"Error updating config: {e}")
 
     def update_config_key(self, payload, key):
-        try: 
+        try:
             config = json.loads(payload)
-            self.config["keys"][key] = config
+            with self.config_lock:
+                self.config["keys"][key] = config
+            self._save_config()
             self.update_key(key)
-            with open('data.json', 'w') as f:
-                json.dump(self.config, f)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON payload for key {key}: {e}")
         except Exception as e:
-            print("could not validate Payload", e)
+            print(f"Error updating key {key}: {e}")
 
     def update_key(self, key):
         key_width, key_height = self.deck.key_image_format()['size']
-        key_config = self.config["keys"][key]
+        with self.config_lock:
+            key_config = self.config["keys"][key]
         icon_string = key_config["icon"]
-        try: 
+        try:
             if icon_string.startswith("mdi:"):
-                response = requests.get(iconDownloadPath.format(icon_string.split(":").pop()))
+                response = requests.get(
+                    iconDownloadPath.format(icon_string.split(":").pop()),
+                    timeout=ICON_DOWNLOAD_TIMEOUT
+                )
+                response.raise_for_status()
                 icon = response.content
                 et = xml.etree.ElementTree.fromstring(response.content)
                 if "color" in key_config:
                     color = key_config["color"]
                 else:
-                    color = "blue"
+                    color = DEFAULT_ICON_COLOR
                 et.attrib["fill"] = color
 
                 icon = xml.etree.ElementTree.tostring(et)
@@ -208,13 +236,18 @@ class StreamDeckMQTT:
             key_image = PILHelper.create_key_image(self.deck)
             key_image.paste(icon)
             self.deck.set_key_image(key, PILHelper.to_native_key_format(self.deck, key_image))
+        except requests.Timeout:
+            print(f"Error: Timeout downloading icon for key {key}")
+        except requests.RequestException as e:
+            print(f"Error: Failed to download icon for key {key}: {e}")
         except Exception as e:
-            print("could not update key {}".format(key), e)
+            print(f"Error: Could not update key {key}: {e}")
 
     def update_keys(self):
-        keys_config = self.config["keys"]
+        with self.config_lock:
+            keys_config = self.config["keys"].copy()
         for idx, c in enumerate(keys_config):
-            if bool(c):
+            if c:
                 self.update_key(idx)
             
 

@@ -15,6 +15,8 @@
 import os
 import threading
 import json
+import time
+import sys
 
 from dotenv import load_dotenv
 from PIL import Image, ImageOps
@@ -65,37 +67,59 @@ def print_deck_info(index, deck):
 
 
 if __name__ == "__main__":
-    streamdecks = DeviceManager().enumerate()
+    try:
+        streamdecks = DeviceManager().enumerate()
+        print("Found {} Stream Deck(s).\n".format(len(streamdecks)))
 
-    print("Found {} Stream Deck(s).\n".format(len(streamdecks)))
+        load_dotenv()
 
-    load_dotenv()
+        REQUIRED_VARS = ["MQTT_USER", "MQTT_PASS", "MQTT_HOST"]
+        for var in REQUIRED_VARS:
+            if not os.getenv(var):
+                raise EnvironmentError(f"Missing required environment variable: {var}")
 
-    REQUIRED_VARS = ["MQTT_USER", "MQTT_PASS", "MQTT_HOST"]
+        MQTT_USER = os.getenv("MQTT_USER")
+        MQTT_PASS = os.getenv("MQTT_PASS")
+        MQTT_HOST = os.getenv("MQTT_HOST")
+        MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 
-    for var in REQUIRED_VARS:
-        if not os.getenv(var):
-            raise EnvironmentError(f"Missing required environment variable: {var}")
+        deck_handlers = []
 
-    MQTT_USER = os.getenv("MQTT_USER")
-    MQTT_PASS = os.getenv("MQTT_PASS")
-    MQTT_HOST = os.getenv("MQTT_HOST")
-    MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+        for index, deck in enumerate(streamdecks):
+            # This example only works with devices that have screens.
+            if not deck.is_visual():
+                continue
 
-    for index, deck in enumerate(streamdecks):
-        # This example only works with devices that have screens.
-        if not deck.is_visual():
-            continue
-        
-        mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        mqttc.username_pw_set(MQTT_USER, MQTT_PASS)
+            try:
+                mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+                mqttc.username_pw_set(MQTT_USER, MQTT_PASS)
+                mqttc.connect(MQTT_HOST, MQTT_PORT, 60)
 
+                print_deck_info(index, deck)
+                handler = StreamDeckMQTT(mqttc, deck)
+                deck_handlers.append(handler)
 
-        mqttc.connect(MQTT_HOST, MQTT_PORT, 60)
+                # Start MQTT loop in background
+                mqttc.loop_start()
+            except Exception as e:
+                print(f"Error initializing deck {index}: {e}")
+                continue
 
-        deck.open()
-        print_deck_info(index, deck)
-        StreamDeckMQTT(mqttc, deck)
-        
+        if not deck_handlers:
+            print("No decks successfully initialized. Exiting.")
+            sys.exit(1)
 
-        
+        print("\nStreamDeck MQTT bridge running. Press Ctrl+C to exit.\n")
+
+        # Keep main thread alive
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            for handler in deck_handlers:
+                handler.stop()
+
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
