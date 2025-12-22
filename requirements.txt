@@ -14,7 +14,7 @@ pillow==11.0.0
 pycparser==2.22
 python-dotenv==1.0.1
 referencing==0.36.2
-requests==2.32.3
+requests==2.32.4
 rpds-py==0.22.3
 streamdeck==0.9.6
 tinycss2==1.4.0
