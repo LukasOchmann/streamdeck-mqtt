@@ -1,7 +1,7 @@
 # Streamdeck MQTT
 
 I created this project because i wanted to have an stream deck as an controller for
-home assistant. I found (this streamdeck)[https://github.com/timothycrosley/streamdeck-ui].
+home assistant. It is using this [library](https://github.com/abcminiuser/python-elgato-streamdeck#python-elgato-stream-deck-library)
 
 
 ## Usage
