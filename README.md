@@ -4,9 +4,93 @@ I created this project because i wanted to have an stream deck as an controller 
 home assistant. It is using this [library](https://github.com/abcminiuser/python-elgato-streamdeck#python-elgato-stream-deck-library)
 
 
-## Usage
+## Hardware
 
-Use a Raspberry Pi or Raspberry Pi Zero W and connect the Stream Deck.
+| Part | Notes |
+| --- | --- |
+| Elgato Stream Deck | Original, Original V2, MK.2, Mini, Mini MK.2, XL, XL V2, Neo, Plus and Pedal are supported by the underlying [python-elgato-streamdeck](https://github.com/abcminiuser/python-elgato-streamdeck) library |
+| Raspberry Pi | Anything that can run the prebuilt images: `arm64` (Pi 3/4/5, Pi Zero 2 W with a 64-bit OS) or `arm/v7` (Pi 2/3, Pi Zero 2 W with a 32-bit OS). The **original** Pi Zero / Zero W is ARMv6 and is *not* covered by the prebuilt images — you would have to build the image yourself on that hardware |
+| microSD card | 8 GB or more, for Raspberry Pi OS Lite |
+| Power supply | The official supply for your Pi model |
+| USB OTG adapter | Only for the Pi Zero 2 W: micro-USB (male) to USB-A (female), plugged into the **middle** port labelled `USB`, not the one labelled `PWR` |
+| Powered USB hub | Recommended, especially for the larger decks (XL, MK.2). The Stream Deck is fed from the Pi's USB port, and an unpowered Zero 2 W port can be marginal — if the deck resets or is not detected reliably, a powered hub usually fixes it |
+
+Everything below uses a Raspberry Pi Zero 2 W as the example, but the steps are
+identical on any other Pi.
+
+## Setting up a Raspberry Pi Zero 2 W
+
+### 1. Flash the OS
+
+Use the [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and pick
+**Raspberry Pi OS Lite (64-bit)** — no desktop needed, and the 64-bit build pulls
+the `arm64` image. In the Imager's settings dialog (the gear / "Edit settings")
+configure before writing:
+
+- hostname (e.g. `streamdeck`)
+- username and password
+- Wi-Fi SSID and password — the Zero 2 W only supports **2.4 GHz** networks
+- enable SSH
+
+Write the card, put it into the Pi, connect the Stream Deck through the OTG
+adapter (or the powered hub) and power the Pi up.
+
+### 2. Log in and update
+
+```sh
+ssh <user>@streamdeck.local
+sudo apt update && sudo apt full-upgrade -y
+```
+
+### 3. Install Docker
+
+```sh
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+```
+
+Log out and back in so the group membership applies.
+
+### 4. Allow access to the Stream Deck
+
+The container runs as a non-root user, so the USB device node has to be
+readable/writable for it. Add a udev rule on the **host** for Elgato's vendor id
+`0fd9`:
+
+```sh
+sudo tee /etc/udev/rules.d/99-streamdeck.rules > /dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0fd9", MODE="0666"
+EOF
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Unplug and replug the Stream Deck afterwards, then verify it is there:
+
+```sh
+lsusb | grep -i elgato
+```
+
+### 5. Configure and start the service
+
+```sh
+mkdir -p ~/streamdeck && cd ~/streamdeck
+echo '{}' > data.json
+```
+
+Create a `.env` file (see [MQTT settings](#mqtt-settings)) and a `compose.yaml`
+as shown below, then:
+
+```sh
+docker compose up -d
+docker compose logs -f
+```
+
+The log prints the deck type, key count and the serial number — you need that
+serial number if you want to address this deck individually via MQTT.
+
+## Usage
 
 ### Docker Images
 
@@ -126,4 +210,5 @@ If you want to use keys as a e.g. dimmer you can listen to
 and
 `streamdeck/<key>/up`
 `streamdeck/<key>/<serialNumber>/up`
+
 
